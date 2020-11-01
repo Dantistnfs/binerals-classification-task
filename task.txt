@@ -1,0 +1,10 @@
+Your task is to make model using python and pytorch (https://pytorch.org) which will be able to classify articles by 5 topics (business, entertainment, politics, sport, tech).
+
+Articles for training and testing you can find in the "articles" folder. Final testing of the result will be done on the articles which are not presented in your "articles" folder.
+
+Result project has to have the "assessment.py" file which accepts path to folder with articles for assessment as the first argument. After running "python assessment.py path/to/articles" the assessment of model happens and accuracy of the prediction is displayed.
+The structure of folder with articles for assessment is the same as the "articles" folder that is provided for you.
+
+Your goal is to achieve accuracy 90% or higher for articles on which your model was not trained.
+
+Good luck!
