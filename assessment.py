@@ -1,14 +1,11 @@
 """
 Code for classification of text articles
 """
-import os
 import argparse
 import random
 import re
 
 import tqdm
-import numpy as np
-import pandas as pd
 
 import torch
 import torch.nn as nn
@@ -17,72 +14,13 @@ import torch.optim as optim
 from torch.autograd import Variable
 
 from torchtext import data
-from torchtext.data import Iterator, BucketIterator
+
+import helpers
 
 BATCH_SIZE = 32
 DEFAULT_ARTICLE_FOLDER = "./articles"
 SEED = 0
 DEFAULT_TRAIN_DEVICE = 'cpu'
-
-
-class DataFrameDataset(data.Dataset):
-    """Class for using pandas DataFrames as a datasource"""
-    def __init__(self, examples, fields, filter_pred=None):
-        """
-        Create a dataset from a pandas dataframe of examples
-        """
-        self.examples = examples.apply(SeriesExample.fromSeries,
-                                       args=(fields, ),
-                                       axis=1).tolist()
-        if filter_pred is not None:
-            self.examples = filter(filter_pred, self.examples)
-        self.fields = dict(fields)
-        # Unpack field tuples
-        for n, f in list(self.fields.items()):
-            if isinstance(n, tuple):
-                self.fields.update(zip(n, f))
-                del self.fields[n]
-
-
-class SeriesExample(data.Example):
-    """Class to convert a pandas Series to an Example"""
-    @classmethod
-    def fromSeries(cls, data, fields):
-        return cls.fromdict(data.to_dict(), fields)
-
-    @classmethod
-    def fromdict(cls, data, fields):
-        ex = cls()
-        for key, field in fields.items():
-            if key not in data:
-                raise ValueError("Specified key {} was not found in "
-                                 "the input data".format(key))
-            if field is not None:
-                setattr(ex, key, field.preprocess(data[key]))
-            else:
-                setattr(ex, key, data[key])
-        return ex
-
-
-class BatchWrapper:
-    def __init__(self, dl, x_var, y_vars):
-        self.dl, self.x_var, self.y_vars = dl, x_var, y_vars
-
-    def __iter__(self):
-        for batch in self.dl:
-            x = getattr(batch, self.x_var).transpose(0, 1)
-            if self.y_vars is not None:
-                y = torch.cat([
-                    getattr(batch, feat).unsqueeze(1) for feat in self.y_vars
-                ],
-                              dim=1).float()
-            else:
-                y = torch.zeros((1))
-
-            yield (x, y)
-
-    def __len__(self):
-        return len(self.dl)
 
 
 class SimpleLSTM(nn.Module):
@@ -194,28 +132,7 @@ if __name__ == "__main__":
     torch.manual_seed(SEED)
     device = torch.device(TRAIN_DEVICE)
 
-    try:
-        theme_folders = next(os.walk(ARTICLE_FOLDER))[1]  #get only folders
-    except StopIteration:
-        print(f"No directory found for '{ARTICLE_FOLDER}', exiting")
-        raise SystemExit
-
-    print(f"Avalible themes: {theme_folders}")
-
-    df_data = []
-    for theme in theme_folders:
-        theme_files = next(os.walk(f"{ARTICLE_FOLDER}/{theme}"))[2]
-        for theme_file in theme_files:
-            with open(f"{ARTICLE_FOLDER}/{theme}/{theme_file}") as file_data:
-                try:
-                    file_data_read = file_data.read()
-                    if len(file_data_read) > 4000:
-                        file_data_read = file_data_read[:4000]
-                    df_data.append([pre_clean_text(file_data_read), theme])
-                except UnicodeDecodeError:
-                    print(
-                        f"Error in decoding file {theme_file}, in theme {theme}"
-                    )
+    theme_folders = helpers.get_article_themes(ARTICLE_FOLDER)
 
     TEXT = data.Field(sequential=True, tokenize='spacy', batch_first=True)
     THEME = data.LabelField(batch_first=True, use_vocab=False)
@@ -225,12 +142,9 @@ if __name__ == "__main__":
 
     print(fields)
 
-    df = pd.DataFrame(df_data, columns=['text', 'theme'])
+    df = helpers.get_articles(ARTICLE_FOLDER, theme_folders)
 
-    df = pd.concat([df, pd.get_dummies(df['theme'])], axis=1).drop(['theme'],
-                                                                   axis=1)
-
-    training_data = DataFrameDataset(df, fields)
+    training_data = helpers.DataFrameDataset(df, fields)
 
     train_data, valid_data = training_data.split(
         split_ratio=0.9, random_state=random.seed(SEED))
@@ -246,8 +160,8 @@ if __name__ == "__main__":
         sort_within_batch=False,
         repeat=False)
 
-    train_dl = BatchWrapper(train_iter, "text", theme_folders)
-    valid_dl = BatchWrapper(val_iter, "text", theme_folders)
+    train_dl = helpers.BatchWrapper(train_iter, "text", theme_folders)
+    valid_dl = helpers.BatchWrapper(val_iter, "text", theme_folders)
 
     em_sz = 100
     nh = 128
