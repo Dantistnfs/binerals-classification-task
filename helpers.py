@@ -2,12 +2,15 @@
 Various helper functions for loading and processing text data
 """
 import os
+import argparse
+import re
 import pandas as pd
 
-from torchtext import data
+import torch
+import torchtext
 
 
-class DataFrameDataset(data.Dataset):
+class DataFrameDataset(torchtext.data.Dataset):
     """Class for using pandas DataFrames as a datasource"""
     def __init__(self, examples, fields, filter_pred=None):
         """
@@ -26,7 +29,7 @@ class DataFrameDataset(data.Dataset):
                 del self.fields[n]
 
 
-class SeriesExample(data.Example):
+class SeriesExample(torchtext.data.Example):
     """Class to convert a pandas Series to an Example"""
     @classmethod
     def fromSeries(cls, data, fields):
@@ -60,19 +63,23 @@ class BatchWrapper:
                               dim=1).float()
             else:
                 y = torch.zeros((1))
-
             yield (x, y)
 
     def __len__(self):
         return len(self.dl)
 
 
+def pre_clean_text(text):
+    """Replaces unnesessary symbols from text """
+    return re.sub(r"[.,\"'\\\/\n-]", ' ', text)
+
+
 def get_article_themes(article_folder):
     try:
-        theme_folders = next(os.walk(ARTICLE_FOLDER))[1]  #get only folders
-    except StopIteration:
-        print(f"No directory found for '{ARTICLE_FOLDER}', exiting")
-        raise SystemExit
+        theme_folders = next(os.walk(article_folder))[1]  #get only folders
+    except StopIteration as exception:
+        print(f"No directory found for '{article_folder}', exiting")
+        raise exception
     print(f"Avalible themes: {theme_folders}")
     return theme_folders
 
@@ -80,9 +87,9 @@ def get_article_themes(article_folder):
 def get_articles(article_folder, theme_folders):
     df_data = []
     for theme in theme_folders:
-        theme_files = next(os.walk(f"{ARTICLE_FOLDER}/{theme}"))[2]
+        theme_files = next(os.walk(f"{article_folder}/{theme}"))[2]
         for theme_file in theme_files:
-            with open(f"{ARTICLE_FOLDER}/{theme}/{theme_file}") as file_data:
+            with open(f"{article_folder}/{theme}/{theme_file}") as file_data:
                 try:
                     file_data_read = file_data.read()
                     if len(file_data_read) > 4000:
@@ -93,8 +100,28 @@ def get_articles(article_folder, theme_folders):
                         f"Error in decoding file {theme_file}, in theme {theme}"
                     )
 
-    df = pd.DataFrame(df_data, columns=['text', 'theme'])
-    df = pd.concat([df, pd.get_dummies(df['theme'])], axis=1).drop(['theme'],
-                                                                   axis=1)
+    text_df = pd.DataFrame(df_data, columns=['text', 'theme'])
 
-    return df
+    for theme in theme_folders:  # this forces certain order of columns for one-hot encoding
+        text_df.loc[text_df['theme'] == theme, theme] = 1
+
+    text_df = text_df.drop('theme', axis=1)
+    text_df = text_df.fillna(0)
+    return text_df
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='')
+
+    parser.add_argument(
+        "-i",
+        "--input",
+        dest="input",
+        help="Input folder for model to train defaults to './articles'")
+
+    parser.add_argument(
+        "-d",
+        "--device",
+        help="What device to use for traning, defaults to 'cpu', can be 'cuda'"
+    )
+    return parser.parse_args()
