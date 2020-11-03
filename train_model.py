@@ -59,7 +59,6 @@ if __name__ == "__main__":
         sort_key=lambda x: len(x.text),
         sort_within_batch=False,
         repeat=False)
-    raise SystemExit
 
     train_dl = helpers.BatchWrapper(train_iter, "text", theme_folders)
     valid_dl = helpers.BatchWrapper(val_iter, "text", theme_folders)
@@ -77,4 +76,5 @@ if __name__ == "__main__":
                         train_dataset=train_dl,
                         validation_dataset=valid_dl)
 
-    model_helpers.save_model(model)
+    model_helpers.save_model(model, "trained_model.pth")
+    model_helpers.save_vocab(TEXT.vocab, "trained_vocab.vcb")

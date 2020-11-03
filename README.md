@@ -2,6 +2,7 @@
 
 Some notes how to run:
 
+Init virtualenv and install dependencies
 ```bash
 virtualenv venv
 
@@ -10,9 +11,19 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 python -m spacy download en
+```
 
+Training:
+```bash
+python train_model.py -i ./articles
+```
+
+
+Prediction:
+```bash
 python assessment.py -i ./articles
 ```
+
 
 Some notes:
 - python will need 5-6 Gb of space on hard drive for pytorch, spacy with GloVE embeddings
